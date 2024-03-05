@@ -1,16 +1,23 @@
 from __main__ import app
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy.orm import backref
+from sqlalchemy.orm import relationship
 from werkzeug.security import generate_password_hash, check_password_hash
+import enum
 
 db = SQLAlchemy(app)
-tk=SQLAlchemy(app)
+
+class YourRole(enum.Enum):
+    admin = "admin"
+    user = "user"
+
 class User(db.Model):
-    
+    __tablename__='user'
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(50), unique=True, nullable=False)
     password_hash = db.Column(db.String(100), nullable=False)
-    role=db.Column(db.String(100))
+    role=db.Column(db.Enum(YourRole))
+
+    users_info = db.relationship('Task', backref='users')
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 
@@ -25,26 +32,32 @@ class User(db.Model):
         db.session.commit()
 with app.app_context():
     db.create_all()
-class Task(tk.Model):
-    id = tk.Column(tk.Integer, primary_key=True)
-    username = tk.Column(tk.String(50), unique=True, nullable=False)
-    role=tk.Column(tk.String(100))
-    task = tk.Column(tk.String(100))
+class Task(db.Model):
+    __tablename__='tasks'
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(50), unique=True, nullable=False)
+    task = db.Column(db.String(100))
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'),nullable=False)
+    
+    task_info = db.relationship('Comments', backref='tasks')
     def assign(self):
-        tk.session.add(self)
-        tk.session.commit()
+        db.session.add(self)
+        db.session.commit()
     def remove(self):
-        tk.session.delete(self)
-        tk.session.commit()
-class Comments(tk.Model):
-    id = tk.Column(tk.Integer, primary_key=True)
-    username = tk.Column(tk.String(50), unique=True, nullable=False)
-    comment = tk.Column(tk.String(100))
+        db.session.delete(self)
+        db.session.commit()
+class Comments(db.Model):
+    __tablename__='comments'
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(50), unique=True, nullable=False)
+    comment = db.Column(db.String(100))
+    tasks_id = db.Column(db.Integer, db.ForeignKey('tasks.id'),nullable=False)
+
     def add(self):
-        tk.session.add(self)
-        tk.session.commit()
+        db.session.add(self)
+        db.session.commit()
     def remove(self):
-        tk.session.delete(self)
-        tk.session.commit()
+        db.session.delete(self)
+        db.session.commit()
 with app.app_context():
-    tk.create_all()
+    db.create_all()
