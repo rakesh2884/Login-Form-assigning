@@ -3,6 +3,8 @@ from flask_jwt_extended import JWTManager, create_access_token
 from flask_jwt_extended import create_access_token
 import os
 import json
+from functools import wraps
+from flask import g, request, redirect, url_for
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -13,6 +15,23 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = os.getenv('SQLALCHEMY_TRACK_MODIF
 app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY')
 
 from model import User,Task, Comments,YourRole
+
+def is_admin(f):
+    @wraps(f)
+    def inner(*args, **kwargs):
+        user=User.query.all()
+        if user[2]==YourRole.user:
+            return redirect(url_for('login', next=request.url))
+        return f(*args, **kwargs)
+    return inner
+def is_user(f):
+    @wraps(f)
+    def inner(*args, **kwargs):
+        user=User.query.all()
+        if user[2]==YourRole.admin:
+            return redirect(url_for('login', next=request.url))
+        return f(*args, **kwargs)
+    return inner
 
 @app.route('/register', methods=['GET','POST'])
 def register():
@@ -37,9 +56,11 @@ def login():
     user = User.query.filter_by(username=username).first()
     if user and user.check_password(password):
         access_token = create_access_token(identity='user_id')
+        
         return jsonify({'message': 'Login successful'}),201
     else:
         return jsonify({'message': 'Invalid username or password'}),401
+
 
 @app.route('/delete', methods=['GET','POST'])
 def delete():
@@ -72,13 +93,14 @@ def password_update():
     else:
         return jsonify({'message': 'user not exist'}),401
 @app.route('/display', methods=['GET','POST'])
+@is_admin
 def display():
     data = request.get_json()
     username = data['username']
     password = data['password']
     
     user= User.query.filter_by(username=username).first()
-    if user and user.check_password(password) and user.role == YourRole.admin:
+    if user and user.check_password(password):
         users=User.query.all()
         arr=[]
         for user in users:
@@ -139,7 +161,7 @@ def task_staus():
         if tasks:
             if task=="Done" or task=="done":
                 tasks.task="Done"
-                tasks.assign()
+                tasks.remove()
                 return jsonify({'message':'task done successfully'}),201
         else:
             return jsonify({'message':'task not assigned'}),400
