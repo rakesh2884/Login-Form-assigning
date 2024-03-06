@@ -3,13 +3,13 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import relationship
 from werkzeug.security import generate_password_hash, check_password_hash
 import enum
+import json
 
 db = SQLAlchemy(app)
 
 class YourRole(enum.Enum):
     admin = "admin"
-    user = "user"
-
+    user = "user"  
 class User(db.Model):
     __tablename__='user'
     id = db.Column(db.Integer, primary_key=True)

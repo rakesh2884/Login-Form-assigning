@@ -2,18 +2,26 @@ from flask import Flask, request, jsonify
 from flask_jwt_extended import JWTManager, create_access_token
 from flask_jwt_extended import create_access_token
 import os
-import json
+from flask_mail import Mail, Message
 from functools import wraps
 from flask import g, request, redirect, url_for
 from dotenv import load_dotenv
 
 load_dotenv()
 app = Flask(__name__)
-jwt = JWTManager(app)
+
+
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = os.getenv('SQLALCHEMY_TRACK_MODIFICATIONS')
 app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY')
-
+app.config['MAIL_SERVER'] = os.getenv('MAIL_SERVER')
+app.config['MAIL_PORT'] = os.getenv('MAIL_PORT')
+app.config['MAIL_USE_SSL'] = os.getenv('MAIL_USE_SSL')
+app.config['MAIL_USE_TLS'] = os.getenv('MAIL_USE_TLS')
+app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME')
+app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')
+jwt = JWTManager(app)
+mail = Mail(app)
 from model import User,Task, Comments,YourRole
 
 def is_admin(f):
@@ -46,8 +54,13 @@ def register():
         return jsonify({'message':'User already exist'}),201
     elif role!="admin" and role!="user":
         return jsonify({'message':'not a valid role'}),401
-    user.save()
-    return jsonify({'message': 'User registered successfully'}),201
+    else:
+        msg = Message(subject='Registration Successful', sender='igkai2884@gmail.com', recipients=['torafe3853@aersm.com'])
+        msg.body = "Hey, "+username+" you are successfully registered for the role of "+role
+        mail.send(msg)
+        user.save()
+        return jsonify({'message': 'User registered successfully'}),201
+
 @app.route('/login', methods=['GET','POST'])
 def login():
     data = request.get_json()
@@ -56,7 +69,7 @@ def login():
     user = User.query.filter_by(username=username).first()
     if user and user.check_password(password):
         access_token = create_access_token(identity='user_id')
-        
+        user.remove()
         return jsonify({'message': 'Login successful'}),201
     else:
         return jsonify({'message': 'Invalid username or password'}),401
@@ -89,7 +102,10 @@ def password_update():
         user = User(username=username)
         user.set_password(password)
         user.save()
-        return jsonify({'message': 'user data updated successfully'}),201
+        msg = Message(subject='Password updated', sender='igkai2884@gmail.com', recipients=['torafe3853@aersm.com'])
+        msg.body = "Hey "+username+" your password updated successfully"
+        mail.send(msg)
+        return jsonify({'message': 'user password updated successfully'}),201
     else:
         return jsonify({'message': 'user not exist'}),401
 @app.route('/display', methods=['GET','POST'])
@@ -168,13 +184,13 @@ def task_staus():
     else:
         return jsonify({'message':'user not exist'}),401
 @app.route('/task_comments',methods=['GET','POST'])
+@is_admin
 def task_comments():
     data = request.get_json()
     admin_username = data['admin_username']
     admin_password = data['admin_password']
     admin = User.query.filter_by(username=admin_username).first()
     if admin and admin.check_password(admin_password): 
-        if admin.role==YourRole.admin:
             username=data['username']
             comment=data['comment']
             user=User.query.filter_by(username=username).first()
@@ -188,8 +204,6 @@ def task_comments():
                     return jsonify({'message':'task still pending'}),400
             else:
                 return jsonify({'message':'there is no user of such name'}),400
-        else:
-            return jsonify({'message':'do not have access'}),401
     else:
         return jsonify({'message':'admin not exist'}),401
 if __name__ == '__main__':
