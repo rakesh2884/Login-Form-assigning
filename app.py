@@ -7,6 +7,7 @@ from functools import wraps
 from flask import g, request, redirect, url_for
 from dotenv import load_dotenv
 
+
 load_dotenv()
 app = Flask(__name__)
 
@@ -23,23 +24,7 @@ app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')
 jwt = JWTManager(app)
 mail = Mail(app)
 from model import User,Task, Comments,YourRole
-
-def is_admin(f):
-    @wraps(f)
-    def inner(*args, **kwargs):
-        user=User.query.all()
-        if user[2]==YourRole.user:
-            return redirect(url_for('login', next=request.url))
-        return f(*args, **kwargs)
-    return inner
-def is_user(f):
-    @wraps(f)
-    def inner(*args, **kwargs):
-        user=User.query.all()
-        if user[2]==YourRole.admin:
-            return redirect(url_for('login', next=request.url))
-        return f(*args, **kwargs)
-    return inner
+from decorators import is_admin
 
 @app.route('/register', methods=['GET','POST'])
 def register():
@@ -47,6 +32,7 @@ def register():
     username = data['username']
     password = data['password']
     role=data['role']
+    email=data['email']
     user = User(username=username,role=role)
     user.set_password(password)
     existing_user= User.query.filter_by(username=username).first()
@@ -55,7 +41,7 @@ def register():
     elif role!="admin" and role!="user":
         return jsonify({'message':'not a valid role'}),401
     else:
-        msg = Message(subject='Registration Successful', sender='igkai2884@gmail.com', recipients=['torafe3853@aersm.com'])
+        msg = Message(subject='Registration Successful', sender=os.getenv('MAIL_USERNAME'), recipients=[email])
         msg.body = "Hey, "+username+" you are successfully registered for the role of "+role
         mail.send(msg)
         user.save()
@@ -92,7 +78,7 @@ def password_update():
     data = request.get_json()
     username = data['username']
     password = data['password']
-
+    email=data['email']
     user = User.query.filter_by(username=username).first()
 
     if user and user.check_password(password):
@@ -102,7 +88,7 @@ def password_update():
         user = User(username=username)
         user.set_password(password)
         user.save()
-        msg = Message(subject='Password updated', sender='igkai2884@gmail.com', recipients=['torafe3853@aersm.com'])
+        msg = Message(subject='Password updated', sender=os.getenv('MAIL_USERNAME'), recipients=[email])
         msg.body = "Hey "+username+" your password updated successfully"
         mail.send(msg)
         return jsonify({'message': 'user password updated successfully'}),201
