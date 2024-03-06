@@ -3,10 +3,9 @@ from flask_jwt_extended import JWTManager, create_access_token
 from flask_jwt_extended import create_access_token
 import os
 from flask_mail import Mail, Message
-from functools import wraps
-from flask import g, request, redirect, url_for
 from dotenv import load_dotenv
-
+import base64
+from jwt import encode,decode
 
 load_dotenv()
 app = Flask(__name__)
@@ -41,12 +40,43 @@ def register():
     elif role!="admin" and role!="user":
         return jsonify({'message':'not a valid role'}),401
     else:
-        msg = Message(subject='Registration Successful', sender=os.getenv('MAIL_USERNAME'), recipients=[email])
-        msg.body = "Hey, "+username+" you are successfully registered for the role of "+role
+        token = encode({"email": email,"username":username,"password":password}, os.getenv('JWT_SECRET_KEY'))
+        sample_string = token
+        sample_string_bytes = sample_string.encode("ascii") 
+        
+        base64_bytes = base64.b64encode(sample_string_bytes) 
+        base64_string = base64_bytes.decode("ascii") 
+        msg = Message(subject='verification Email', sender=os.getenv('MAIL_USERNAME'), recipients=[email])
+        msg.body = "Hey, "+username+" please verify the mail\n"+base64_string
         mail.send(msg)
-        user.save()
-        return jsonify({'message': 'User registered successfully'}),201
-
+        return jsonify({'message': 'Verification mail sent'}),201
+@app.route('/token_check',methods=['GET','POST'])
+def token_check():
+    data=request.get_json()
+    username=data['username']
+    password=data['password']
+    v_link=data['v_link']
+    EMail=data['email']
+    role=data['role']
+    base64_string =v_link
+    base64_bytes = base64_string.encode("ascii") 
+    
+    sample_string_bytes = base64.b64decode(base64_bytes) 
+    sample_string = sample_string_bytes.decode("ascii") 
+    Decrypt = decode(sample_string, os.getenv('JWT_SECRET_KEY'),algorithms=['HS256'])
+    email = Decrypt["email"]
+    user_n=Decrypt["username"]
+    passw=Decrypt["password"]
+    if EMail==email and username==user_n and password==passw:
+        user = User(username=username,role=role)
+        user.set_password(password)
+        existing_user= User.query.filter_by(username=username).first()
+        if existing_user:
+            return jsonify({'message':'User already exist'}),401
+        else:
+            user.save()
+            return jsonify({'message':'user registered successfully'}),201
+    return jsonify({'message':'user not verified'})
 @app.route('/login', methods=['GET','POST'])
 def login():
     data = request.get_json()
@@ -54,7 +84,6 @@ def login():
     password = data['password']
     user = User.query.filter_by(username=username).first()
     if user and user.check_password(password):
-        access_token = create_access_token(identity='user_id')
         user.remove()
         return jsonify({'message': 'Login successful'}),201
     else:
