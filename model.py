@@ -3,7 +3,8 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import relationship
 from werkzeug.security import generate_password_hash, check_password_hash
 import enum
-import json
+
+from itsdangerous import URLSafeTimedSerializer
 
 db = SQLAlchemy(app)
 
