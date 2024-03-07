@@ -4,7 +4,6 @@ from sqlalchemy.orm import relationship
 from werkzeug.security import generate_password_hash, check_password_hash
 import enum
 
-from itsdangerous import URLSafeTimedSerializer
 
 db = SQLAlchemy(app)
 
@@ -17,8 +16,8 @@ class User(db.Model):
     username = db.Column(db.String(50), unique=True, nullable=False)
     password_hash = db.Column(db.String(100), nullable=False)
     role=db.Column(db.Enum(YourRole))
-
     users_info = db.relationship('Task', backref='users')
+    
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 
