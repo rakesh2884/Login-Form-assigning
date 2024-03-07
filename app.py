@@ -22,13 +22,13 @@ app.config['MAIL_USE_TLS'] = os.getenv('MAIL_USE_TLS')
 app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME')
 app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')
 account_sid = "ACedfca19e17cc01d2c3c3bf6f1a457488"
-auth_token = "716c6486389c008fa27062fd924534b8"
+auth_token = "3364ea65328ce5b3b75175f45efe29ea"
 verify_sid = "VA65fb5263609a6dabe784959917218d35"
 verified_number = "+918595752360"
 client = Client(account_sid, auth_token)
 jwt = JWTManager(app)
 mail = Mail(app)
-api = AuthyApiClient('716c6486389c008fa27062fd924534b8')
+api = AuthyApiClient('3364ea65328ce5b3b75175f45efe29ea')
 from model import User,Task, Comments,YourRole
 from decorators import is_admin
 
@@ -109,6 +109,7 @@ def token_check():
                 return jsonify({'message':'user not verified'})
     else:
         return jsonify ({'message':'Invalid Verification method'})
+ 
 @app.route('/login', methods=['GET','POST'])
 def login():
     data = request.get_json()
@@ -120,7 +121,44 @@ def login():
         return jsonify({'message': 'Login successful'}),201
     else:
         return jsonify({'message': 'Invalid username or password'}),401
-
+@app.route('/forgot_password',methods=['GET','POST'])
+def forgot_password():
+    data=request.get_json()
+    username=data['username']
+    role=data['role']
+    user = User(username=username,role=role)
+    user=User.query.filter_by(username=username).first()
+    if user:
+        client.verify.v2.services(verify_sid).verifications.create(to=verified_number, channel="sms")
+        return jsonify({'message':'message sent successfully'})
+    else:
+        return jsonify({'message':'user not exist'})
+@app.route('/forgot_password_update',methods=['GET','POST'])
+def forgot_password_update():
+    data=request.get_json()
+    username=data['username']
+    role=data['role']
+    email=data['email']
+    OTP=data['OTP']
+    user = User(username=username,role=role)
+    user=User.query.filter_by(username=username).first()
+    if user:
+        verification_check = client.verify.v2.services(verify_sid).verification_checks.create(to=verified_number, code=OTP)
+        if verification_check.status == "approved":
+            user.remove()
+            username=data['username']
+            password=data['new_password']
+            user = User(username=username,role=role)
+            user.set_password(password)
+            user.save()
+            msg = Message(subject='Password updated', sender=os.getenv('MAIL_USERNAME'), recipients=[email])
+            msg.body = "Hey "+username+" your password updated successfully"
+            mail.send(msg)
+            return jsonify({'message': 'user password updated successfully'}),201
+        elif verification_check.status=="pending":
+            return jsonify({'message':'user not verified'})
+    else:
+        return jsonify({'message': 'user not exist'}),401    
 
 @app.route('/delete', methods=['GET','POST'])
 def delete():
@@ -139,6 +177,7 @@ def password_update():
     data = request.get_json()
     username = data['username']
     password = data['password']
+    role=data['role']
     email=data['email']
     user = User.query.filter_by(username=username).first()
 
@@ -146,7 +185,7 @@ def password_update():
         user.remove()
         username=data['username']
         password=data['new_password']
-        user = User(username=username)
+        user = User(username=username,role=role)
         user.set_password(password)
         user.save()
         msg = Message(subject='Password updated', sender=os.getenv('MAIL_USERNAME'), recipients=[email])
