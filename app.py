@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 from flask_jwt_extended import JWTManager
 import os
+import re
 from flask_mail import Mail, Message
 from dotenv import load_dotenv
 import base64
@@ -37,33 +38,47 @@ def register():
     data = request.get_json()
     username = data['username']
     password = data['password']
+    confirm_password=data['confirm_password']
     role=data['role']
     email=data['email']
     verification_method=data['verification_method']
-    user = User(username=username,role=role)
-    user.set_password(password)
-    existing_user= User.query.filter_by(username=username).first()
-    if existing_user:
-        return jsonify({'message':'User already exist'}),201
-    elif role!="admin" and role!="user":
-        return jsonify({'message':'not a valid role'}),401
+    
+    if len(password) < 8:
+        return jsonify({'message':'Make sure your password is at lest 8 letters'}) 
+    elif re.search('[0-9]',password) is None:
+        return jsonify({'message':'Make sure your password has a number in it'})
+    elif re.search('[A-Z]',password) is None: 
+        return jsonify({'message':'Make sure your password has a capital letter in it'})
+    elif re.search('[^a-zA-Z0-9]',password) is None:
+        return jsonify({'message':'Make sure your password has a special character in it'}) 
+    elif password!=confirm_password:
+        return jsonify({'message':'password not match'})
     else:
-        if verification_method=="email":
-            token = encode({"email": email,"username":username,"password":password}, os.getenv('JWT_SECRET_KEY'))
-            sample_string = token
-            sample_string_bytes = sample_string.encode("ascii") 
-            
-            base64_bytes = base64.b64encode(sample_string_bytes) 
-            base64_string = base64_bytes.decode("ascii") 
-            msg = Message(subject='verification Email', sender=os.getenv('MAIL_USERNAME'), recipients=[email])
-            msg.body = "Hey, "+username+" please verify the mail\n"+base64_string
-            mail.send(msg)
-            return jsonify({'message': 'Verification mail sent'}),201
-        elif verification_method=="sms":
-            client.verify.v2.services(verify_sid).verifications.create(to=verified_number, channel="sms")
-            return jsonify({'message':'message sent successfully'})
+        user = User(username=username,role=role)
+        user.set_password(password)
+        existing_user= User.query.filter_by(username=username).first()
+        if existing_user:
+            return jsonify({'message':'User already exist'}),201
+        elif role!="admin" and role!="user":
+            return jsonify({'message':'not a valid role'}),401
         else:
-            return jsonify ({'message':'Invalid Verification method'})
+            if verification_method=="email":
+                token = encode({"email": email,"username":username,"password":password}, os.getenv('JWT_SECRET_KEY'))
+                sample_string = token
+                sample_string_bytes = sample_string.encode("ascii") 
+                
+                base64_bytes = base64.b64encode(sample_string_bytes) 
+                base64_string = base64_bytes.decode("ascii") 
+                msg = Message(subject='verification Email', sender=os.getenv('MAIL_USERNAME'), recipients=[email])
+                msg.body = "Hey, "+username+" please verify the mail\n"+base64_string
+                mail.send(msg)
+                return jsonify({'message': 'Verification mail sent'}),201
+            elif verification_method=="sms":
+                client.verify.v2.services(verify_sid).verifications.create(to=verified_number, channel="sms")
+                return jsonify({'message':'message sent successfully'})
+            else:
+                return jsonify ({'message':'Invalid Verification method'})
+        
 @app.route('/token_check',methods=['GET','POST'])
 def token_check():
     data=request.get_json()
